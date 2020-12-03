@@ -61,7 +61,7 @@ EXECUTE 'gdxxrw.exe FixedScenarios.gdx O=FixedScenarios.xls par=ScenarioReturn r
 
 display ScenarioReturn;
 
-**********************************************########
+***********************QUESTIN 2**########
 
 
 
@@ -114,7 +114,7 @@ display MU_TARGET;
 
 *From here
 
-scalar HighestLoss;
+scalar HighestLoss, StepSize;
 SCALAR
      lambda    'Risk attitude'
 ;
@@ -170,16 +170,51 @@ MODEL MinCVaRLambda  'The Lambda CVaR model' /BudgetCon, ReturnCon, LossDef, VaR
 MODEL MinVaR  'The VaR model' /BudgetCon, ReturnCon, LossDef, VaRDevCon, SetZ, ObjDefVaR/;
 
 scalar PortRet, WorstCase;
+$ontext
+MU_TARGET = MIN_MU;
+SOLVE MinCVaR MINIMIZING CVaR USING LP;
+PortRet = SUM(i, EP(i) * x.l(i));
+VaR.l = -1*VaR.l;
+CVaR.l = -1*CVaR.l;
+WorstCase = -1*smax(l, Losses.l(l));
+display VaR.l, CVaR.l, WorstCase, PortRet, x.l;
 
+SOLVE MinVaR MINIMIZING VaR USING MIP;
+PortRet = SUM(i, EP(i) * x.l(i));
+VaR.l = -1*VaR.l;
+WorstCase = -1*smax(l, Losses.l(l));
+display VaR.l, WorstCase, PortRet, x.l;
+*----------------------------------*
+
+
+MU_TARGET = MAX_MU;
+SOLVE MinCVaR MINIMIZING CVaR USING LP;
+PortRet = SUM(i, EP(i) * x.l(i));
+VaR.l = -1*VaR.l;
+CVaR.l = -1*CVaR.l;
+WorstCase = -1*smax(l, Losses.l(l));
+display VaR.l, CVaR.l, WorstCase, PortRet, x.l;
+
+SOLVE MinVaR MINIMIZING VaR USING MIP;
+PortRet = SUM(i, EP(i) * x.l(i));
+VaR.l = -1*VaR.l;
+WorstCase = -1*smax(l, Losses.l(l));
+display VaR.l, WorstCase, PortRet, x.l;
+$offtext
+*----------------------------------*
 
 
 
 MU_TARGET = (MAX_MU+MIN_MU)/2;
-display MU_TARGET;
 
-*MU_TARGET = MU_TARGET + 0.003;
-*display MU_TARGET;
+
+display MU_TARGET;
+MU_TARGET = MU_TARGET + 0.003;
+display MU_TARGET;
 lambda = 0.2;
+
+
+
 SOLVE MinCVaRLambda MINIMIZING CVARLambda USING LP;
 PortRet = SUM(i, EP(i) * x.l(i));
 VaR.l = -1*VaR.l;
@@ -187,44 +222,76 @@ CVaR.l = -1*CVaR.l;
 WorstCase = -1*smax(l, Losses.l(l));
 display VarDev.l, VaR.l, CVaR.l, WorstCase, PortRet, x.l;
 
-$exit
-
-
-SOLVE MinCVaR MINIMIZING CVaR USING LP;
-PortRet = SUM(i, EP(i) * x.l(i));
-VaR.l = -1*VaR.l;
-CVaR.l = -1*CVaR.l;
-WorstCase = -1*smax(l, Losses.l(l));
-display VarDev.l, VaR.l, CVaR.l, WorstCase, PortRet, x.l;
 
 
 
-
-
-SOLVE MinVaR MINIMIZING VaR USING MIP;
-PortRet = SUM(i, EP(i) * x.l(i));
-VaR.l = -1*VaR.l;
-WorstCase = -1*smax(l, Losses.l(l));
-display VarDev.l, VaR.l, WorstCase, PortRet, x.l;
-
-
-
-
-
-
-
-*StepSize = ((0.935 - 0.045) / (CARD(p)-1));
-*VarLevel = 0.935;
-*LOOP(p$(ord(p)>1 and ord(p)<card(p)),
-*   lambda = RiskWeight(p);
-*   VarLevel = VarLevel - StepSize;
-*   SOLVE MeanVar MAXIMIZING z USING NLP;
-*   MeanVar.SOLPRINT = 2;
-*   MinimumVariance(p)= PortVariance.l;
-*   PortfolioReturn(p)  = PortReturn.l;
-*   OptimalAllocation(p,i)     = x.l(i);
-*   SolverStatus(p,'solvestat') = MeanVar.solvestat;
-*   SolverStatus(p,'modelstat') = MeanVar.modelstat;
-*   SolverStatus(p,'objective') = MeanVar.objval
-*);
+*SOLVE MinCVaR MINIMIZING CVaR USING LP;
+*PortRet = SUM(i, EP(i) * x.l(i));
+*VaR.l = -1*VaR.l;
+*CVaR.l = -1*CVaR.l;
+*WorstCase = -1*smax(l, Losses.l(l));
+*display VarDev.l, VaR.l, CVaR.l, WorstCase, PortRet, x.l;
 *
+*
+*
+*
+*
+*SOLVE MinVaR MINIMIZING VaR USING MIP;
+*PortRet = SUM(i, EP(i) * x.l(i));
+*VaR.l = -1*VaR.l;
+*WorstCase = -1*smax(l, Losses.l(l));
+*display VarDev.l, VaR.l, WorstCase, PortRet, x.l;
+
+
+
+
+
+SET FrontierPoints / PP_0 * PP_10 /
+
+ALIAS(FrontierPoints,j);
+
+PARAMETERS
+         RiskWeight(j)           Investor's risk attitude parameter
+         PortfolioCVAR(j)      Optimal level of portfolio variance
+         PortfolioReturn(j)      Portfolio return
+         OptimalAllocation(j,i)  Optimal asset allocation
+         SolverStatus(j,*)       Status of the solver
+         SummaryReport(*,*)      Summary report;
+
+* The risk weight, lambda,  has to range in the interval [0,1]
+
+RiskWeight(j) = (ORD(j)-1)/(CARD(j)-1);
+
+StepSize = ((MAX_MU - MIN_MU) / (CARD(j)-1));
+MU_TARGET = MIN_MU;
+lambda = 0.2;
+LOOP(j$(ord(j)>1 and ord(j)<card(j)),
+   lambda = RiskWeight(j);
+   MU_TARGET = MU_TARGET + StepSize;
+   
+    SOLVE MinCVaRLambda MINIMIZING CVARLambda USING LP;
+    PortRet = SUM(i, EP(i) * x.l(i));
+    VaR.l = -1*VaR.l;
+    CVaR.l = -1*CVaR.l;
+    WorstCase = -1*smax(l, Losses.l(l));
+    display VarDev.l, VaR.l, CVaR.l, WorstCase, PortRet, x.l;
+
+*   MeanVar.SOLPRINT = 2;
+   PortfolioCVAR(j)= CVaR.l;
+   PortfolioReturn(j)  = PortRet;
+*   OptimalAllocation(j,i)     = x.l(i);
+);
+
+* Store results by rows
+
+*SummaryReport(i,j) = OptimalAllocation(j,i);
+SummaryReport('PortfolioCVAR',j) = PortfolioCVAR(j);
+SummaryReport('PortfolioReturn',j) = PortfolioReturn(j);
+SummaryReport('Lambda',j)   = RiskWeight(j);
+
+DISPLAY SummaryReport;
+
+
+EXECUTE_UNLOAD 'Summary.gdx', SummaryReport;
+EXECUTE 'gdxxrw.exe Summary.gdx O=MeanCVARFrontier.xls par=SummaryReport rng=sheet1!a1' ;
+
