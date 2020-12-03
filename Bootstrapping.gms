@@ -115,6 +115,9 @@ display MU_TARGET;
 *From here
 
 scalar HighestLoss;
+SCALAR
+     lambda    'Risk attitude'
+;
 HighestLoss = Budget*(smax((i,l), P(i,l) )- smin((i,l), P(i,l)));
 display P, HighestLoss,Budget;
 
@@ -128,6 +131,7 @@ VARIABLES
        VaR             'Value-at-Risk'
        CVaR            'Objective function value'
        Losses(l)       'Measures of the losses'
+       CVARLambda
 ;
 
 Binary variable
@@ -141,6 +145,7 @@ EQUATIONS
         ObjDefCVaR       'Objective function definition for CVaR minimization'
         SetZ(l)
         ObjDefVaR
+        ObjDefLambda
 ;
 
 BudgetCon ..         SUM(i, x(i)) =E= Budget;
@@ -154,13 +159,14 @@ VaRDevCon(l) ..      VaRDev(l) =G= Losses(l) - VaR;
 
 ObjDefCVaR ..        CVaR =E= VaR + SUM(l, pr(l) * VaRDev(l)) / (1 - alpha);
 
-ObjDef    ..          z     =E= (1-lambda) * PortReturn - lambda * PortVariance;
+ObjDefLambda    ..   CVARLambda     =E= (1-lambda) * SUM(i, EP(i) * x(i)) - lambda * CVaR;
 
 SetZ(l)  ..          HighestLoss*z(l) =G= VaRDev(l);
 
 ObjDefVaR ..         1 - sum(l, pr(l)*z(l)) =G= alpha;
 
 MODEL MinCVaR  'The CVaR model' /BudgetCon, ReturnCon, LossDef, VaRDevCon, ObjDefCVaR/;
+MODEL MinCVaRLambda  'The Lambda CVaR model' /BudgetCon, ReturnCon, LossDef, VaRDevCon, ObjDefCVaR, ObjDefLambda/;
 MODEL MinVaR  'The VaR model' /BudgetCon, ReturnCon, LossDef, VaRDevCon, SetZ, ObjDefVaR/;
 
 scalar PortRet, WorstCase;
@@ -173,7 +179,15 @@ display MU_TARGET;
 
 *MU_TARGET = MU_TARGET + 0.003;
 *display MU_TARGET;
+lambda = 0.2;
+SOLVE MinCVaRLambda MINIMIZING CVARLambda USING LP;
+PortRet = SUM(i, EP(i) * x.l(i));
+VaR.l = -1*VaR.l;
+CVaR.l = -1*CVaR.l;
+WorstCase = -1*smax(l, Losses.l(l));
+display VarDev.l, VaR.l, CVaR.l, WorstCase, PortRet, x.l;
 
+$exit
 
 
 SOLVE MinCVaR MINIMIZING CVaR USING LP;
@@ -182,6 +196,8 @@ VaR.l = -1*VaR.l;
 CVaR.l = -1*CVaR.l;
 WorstCase = -1*smax(l, Losses.l(l));
 display VarDev.l, VaR.l, CVaR.l, WorstCase, PortRet, x.l;
+
+
 
 
 
