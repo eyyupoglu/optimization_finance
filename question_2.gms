@@ -112,6 +112,7 @@ PARAMETERS
          RunningAllocation(pp,i)  'Optimal asset allocation'
          MaxCVar
          MinCVar
+         Losses_all_scenarios(pp, s)
 ;
 
 *first we find the biggest possible average, hence maximum CVaR:
@@ -139,11 +140,17 @@ loop(pp$(ord(pp)>1 and ord(pp)<card(pp)),
     CVarLim = CVarLim - (MaxCVar-MinCVar)/(card(pp)-1);
     SOLVE CVaRModel Maximizing OBJ Using LP;
 *display VarLim, PortVariance.l;
+    Losses_all_scenarios(pp,s) = Losses.l(s);
+*    display Losses.l;
     RunningCVaR(pp) = CVaR.l;
     RunningReturn(pp)  = ExpectedReturn.l;
     RunningAllocation(pp,i)     = x.l(i);
 );
+display Losses_all_scenarios;
+EXECUTE_UNLOAD 'Ques2_losses_all_scenarios.gdx', Losses_all_scenarios;
+EXECUTE 'gdxxrw.exe Ques2.gdx O=Ques2_losses_all_scenarios.xls par=Losses_all_scenarios rng=sheet1!a1' ;
 
+$exit
 display RunningCVaR, RunningReturn, RunningAllocation;
 
 
@@ -196,36 +203,33 @@ MuTarget_SPY = ExpectedReturn.l;
 CVaRTarget_SPY = CVaR.L;
 display MuTarget_SPY, CVaRTarget_SPY;
 
-parameter PortValue(s);
-PortValue(s) = sum(i, P(i, s)*x.l(i) );
-
-parameter SummaryReport(*,*);
-SummaryReport(s,'PortValue') = PortValue(s);
-display PortValue;
-
-BestCase = Smax(s, PortValue(s));
-WorstCase = Smin(s, PortValue(s));
-display ExpectedReturn.l, BestCase, WorstCase;
 
 
 
-EXECUTE_UNLOAD 'SummaryReport.gdx', SummaryReport;
-EXECUTE 'gdxxrw.exe SummaryReport.gdx O=PortValue.xls par=SummaryReport rng=sheet1!a1' ;
 
-//The next two lines are used to free the X variable again
+//free the X variable 
 X.lo(i) = 0;
 X.up(i) = Budget*10;
 
-
-
-
-lambda = 0.999;
-ExpRetLim  = MuTarget_SPY;
-CVaRLim = CVaRTarget_SPY;
+lambda = 0.001;
+CVaRLim =CVaRTarget_SPY;
+ExpRetLim  = -100;
 SOLVE CVaRModel Maximizing OBJ Using LP;
+// these are the values that we are going 
 DISPLAY X.l, ExpectedReturn.l, VaR.L, CVaR.L;
 
 
+
+//free the X variable 
+X.lo(i) = 0;
+X.up(i) = Budget*10;
+lambda = 0.999;
+CVaRLim = Budget*10;
+ExpRetLim = MuTarget_SPY;
+
+SOLVE CVaRModel Maximizing OBJ Using LP;
+// these are the values that we are going 
+DISPLAY X.l, ExpectedReturn.l, VaR.L, CVaR.L;
 
 
 
